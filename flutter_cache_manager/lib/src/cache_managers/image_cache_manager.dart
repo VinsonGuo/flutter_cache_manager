@@ -5,8 +5,10 @@ import 'dart:ui' as ui;
 import 'package:file/file.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:image_size_getter/image_size_getter.dart';
+import 'package:image_size_getter/file_input.dart';
 
-const supportedFileNames = ['jpg', 'jpeg', 'png', 'tga', 'cur', 'ico'];
+const supportedFileNames = ['jpg', 'jpeg', 'png'];
 mixin ImageCacheManager on BaseCacheManager {
   /// Returns a resized image file to fit within maxHeight and maxWidth. It
   /// tries to keep the aspect ratio. It stores the resized image by adding
@@ -70,26 +72,36 @@ mixin ImageCacheManager on BaseCacheManager {
     int? maxHeight,
   ) async {
     final originalFileName = originalFile.file.path;
-    final fileExtension = originalFileName.split('.').last;
+    final fileExtension = originalFileName.split('.').last.toLowerCase();
     if (!supportedFileNames.contains(fileExtension)) {
       return originalFile;
     }
 
-    final image = await _decodeImage(originalFile.file);
+    int imageWidth = 0, imageHeight = 0;
+    try {
+      final result = ImageSizeGetter.getSizeResult(FileInput(originalFile.file));
+      final size = result.size;
+      imageWidth = size.width;
+      imageHeight = size.height;
+      cacheLogger.log('Image size: $size', CacheManagerLogLevel.verbose);
+    } catch (e) {
+      // ignore
+      cacheLogger.log('Error getting image size', CacheManagerLogLevel.warning);
+    }
 
     final shouldResize = maxWidth != null
-        ? image.width > maxWidth
+        ? imageWidth > maxWidth
         : false || maxHeight != null
-            ? image.height > maxHeight
+            ? imageHeight > maxHeight
             : false;
     if (!shouldResize) return originalFile;
     if (maxWidth != null && maxHeight != null) {
-      final resizeFactorWidth = image.width / maxWidth;
-      final resizeFactorHeight = image.height / maxHeight;
+      final resizeFactorWidth = imageWidth / maxWidth;
+      final resizeFactorHeight = imageHeight/ maxHeight;
       final resizeFactor = max(resizeFactorHeight, resizeFactorWidth);
 
-      maxWidth = (image.width / resizeFactor).round();
-      maxHeight = (image.height / resizeFactor).round();
+      maxWidth = (imageWidth / resizeFactor).round();
+      maxHeight = (imageHeight / resizeFactor).round();
     }
 
     final resized = await _decodeImage(originalFile.file,
